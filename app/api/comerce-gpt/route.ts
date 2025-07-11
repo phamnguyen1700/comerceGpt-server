@@ -1,9 +1,9 @@
 import { openai } from "@/lib/openai";
 import { Message } from "ai";
 import { streamText } from "ai";
-// import { z } from "zod";
-// import { IProduct } from "@/types/product";
-// import { getAllProducts } from "@/services/product";
+import { z } from "zod";
+import { IProduct } from "@/types/product";
+import { getAllProducts } from "@/services/product";
 
 export const maxDuration = 30;
 
@@ -17,27 +17,27 @@ const prompt: Omit<Message, "id">[] = [
         Sau đó, bạn sẽ giúp khách hàng xác định được loại da của họ bằng cách đặt từng câu hỏi một để họ trả lời.
         Hãy nhớ là đặt từng câu một thôi không được hỏi 1 lần nhiều câu.
         
-        // Khi đã đủ thông tin về loại da và dị ứng, bạn phải trả lời ngay sản phẩm phù hợp cho khách hàng, không hỏi thêm nữa.
-        // Khi tìm kiếm sản phẩm, hãy tìm kiếm sản phẩm phù hợp với loại da của khách hàng.
-        // Nếu không tìm thấy sản phẩm phù hợp thì báo cho khách hàng biết rằng hiện tại không có sản phẩm phù hợp với loại da của khách hàng.
+        Khi đã đủ thông tin về loại da và dị ứng, bạn phải trả lời ngay sản phẩm phù hợp cho khách hàng, không hỏi thêm nữa.
+        Khi tìm kiếm sản phẩm, hãy tìm kiếm sản phẩm phù hợp với loại da của khách hàng.
+        Nếu không tìm thấy sản phẩm phù hợp thì báo cho khách hàng biết rằng hiện tại không có sản phẩm phù hợp với loại da của khách hàng.
 
-        // Khi gọi tool "productSearch", bạn sẽ nhận về một object JSON như sau:
+        Khi gọi tool "productSearch", bạn sẽ nhận về một object JSON như sau:
 
-        //     {
-        //     "type": "product-list",
-        //     "products": [...],
-        //     "message": "...",         // nếu có
-        //     "status": "out-of-stock"  // hoặc "error"
-        //     }
+        {
+         "type": "product-list",
+         "products": [...],
+         "message": "...",         nếu có
+         "status": "out-of-stock"  hoặc "error"
+        }
 
-        //     ==> Nếu có mảng "products" và độ dài > 0:
-        //     - Bạn phải mô tả ngay 2–3 sản phẩm một cách thân thiện, không cần hỏi lại khách hàng nữa.
+         ==> Nếu có mảng "products" và độ dài > 0:
+         - Bạn phải mô tả ngay 2–3 sản phẩm một cách thân thiện, không cần hỏi lại khách hàng nữa.
 
-        //     ==> Nếu status là "out-of-stock":
-        //     - Hãy báo rằng hiện tại sản phẩm phù hợp đã hết hàng, và hỏi khách có muốn được thông báo khi có hàng mới không.
+         ==> Nếu status là "out-of-stock":
+         - Hãy báo rằng hiện tại sản phẩm phù hợp đã hết hàng, và hỏi khách có muốn được thông báo khi có hàng mới không.
 
-        //     ==> Nếu status là "error":
-        //     - Báo lỗi lịch sự và mời khách thử lại sau.
+         ==> Nếu status là "error":
+         - Báo lỗi lịch sự và mời khách thử lại sau.
 
         Nếu người dùng hỏi câu hỏi không liên quan hãy nói với họ rằng bạn chỉ tư vấn về da.
         `
@@ -45,77 +45,108 @@ const prompt: Omit<Message, "id">[] = [
     }
 ];
 
+export async function OPTIONS() {
+    return new Response(null, {
+        status: 200,
+        headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        },
+    });
+}
+
 export async function POST(req: Request) {
+    if (req.method === 'OPTIONS') {
+        return new Response(null, {
+            status: 200,
+            headers: {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+            },
+        });
+    }
+
     try {
         const json = await req.json();
         const messages: Omit<Message, "id">[] = json.messages;
-        // const products = await getAllProducts(); // fetch mới mỗi lần gọi
+        const products = await getAllProducts();
 
         const firstCall = await streamText({
             model: openai("gpt-4o"),
             messages: prompt.concat(messages),
-            // experimental_activeTools: ["productSearch"],
-            // tools: {
-            //     productSearch: {
-            //         description: `
-            //         Tiếp theo hãy hỏi khách hàng có bị dị ứng với thành phần nào không?
-            //         Nếu khách hàng không biết hãy tư vấn để giúp họ xác định có bị dị ứng với thành phần nào không.
-            //         Nếu khách hàng không bị dị ứng thì hãy tìm kiếm sản phẩm phù hợp theo tên hoặc loại da,... phù hợp với khách hàng đã tư vấn.
-            //         Nếu khách hàng có bị dị ứng thì hãy loại bỏ các sản phẩm có chứa thành phần bị dị ứng trong mảng ingredients của sản phẩm thì loại bỏ sản phẩm đó khỏi danh sách các sản phẩm tìm kiếm được phù hợp với khách hàng ở trên.
-            //         `,
-            //         parameters: z.object({
-            //             skinConcerns: z.enum([
-            //                 "sensitive",
-            //                 "dry",
-            //                 "normal",
-            //                 "combination",
-            //                 "oily",
-            //             ]),
-            //         }),
-            //         execute: async ({ skinConcerns }) => {
-            //             console.log("🧪 [productSearch] Called with skinConcerns:", skinConcerns);
-            //             console.log("Products from store:", products);
+            experimental_activeTools: ["productSearch"],
+            tools: {
+                productSearch: {
+                    description: `
+                    Tiếp theo hãy hỏi khách hàng có bị dị ứng với thành phần nào không?
+                    Nếu khách hàng không biết hãy tư vấn để giúp họ xác định có bị dị ứng với thành phần nào không.
+                    Nếu khách hàng không bị dị ứng thì hãy tìm kiếm sản phẩm phù hợp theo tên hoặc loại da,... phù hợp với khách hàng đã tư vấn.
+                    Nếu khách hàng có bị dị ứng thì hãy loại bỏ các sản phẩm có chứa thành phần bị dị ứng trong mảng ingredients của sản phẩm thì loại bỏ sản phẩm đó khỏi danh sách các sản phẩm tìm kiếm được phù hợp với khách hàng ở trên.
+                    `,
+                    parameters: z.object({
+                        skinConcerns: z.enum([
+                            "sensitive",
+                            "dry",
+                            "normal",
+                            "combination",
+                            "oily",
+                        ]),
+                    }),
+                    execute: async ({ skinConcerns }) => {
+                        console.log("🧪 [productSearch] Called with skinConcerns:", skinConcerns);
+                        console.log("Products from store:", products);
 
-            //             try {
-            //                 const matched = products.data.filter((product: IProduct) =>
-            //                     product.skinConcerns?.includes(skinConcerns)
-            //                 );
+                        try {
+                            const matched = products.data.filter((product: IProduct) =>
+                                product.skinConcerns?.includes(skinConcerns)
+                            );
 
-            //                 console.log("🔍 [productSearch] Matched products:", matched.length);
+                            console.log("🔍 [productSearch] Matched products:", matched.length);
 
-            //                 if (matched.length === 0) {
-            //                     return {
-            //                         role: "assistant" as const,
-            //                         content: "Hiện tại các sản phẩm phù hợp với loại da này đã hết hàng.",
-            //                         description: "Không tìm thấy sản phẩm phù hợp với loại da",
-            //                     };
-            //                 }
+                            if (matched.length === 0) {
+                                return {
+                                    role: "assistant" as const,
+                                    content: "Hiện tại các sản phẩm phù hợp với loại da này đã hết hàng.",
+                                    description: "Không tìm thấy sản phẩm phù hợp với loại da",
+                                };
+                            }
 
-            //                 return {
-            //                     role: "assistant",
-            //                     content: JSON.stringify({
-            //                         type: "product-list",
-            //                         products: matched.slice(0, 3),
-            //                         message: `Dưới đây là một số sản phẩm phù hợp với làn da của bạn:`,
-            //                     }),
-            //                 };
-            //             } catch (err) {
-            //                 console.error("❌ [productSearch] Error:", err);
-            //                 return {
-            //                     role: "assistant" as const,
-            //                     content: "Đã xảy ra lỗi khi tìm sản phẩm. Vui lòng thử lại sau.",
-            //                 };
-            //             }
-            //         }
-            //     },
-            // },
+                            return {
+                                role: "assistant",
+                                content: JSON.stringify({
+                                    type: "product-list",
+                                    products: matched.slice(0, 3),
+                                    message: `Dưới đây là một số sản phẩm phù hợp với làn da của bạn:`
+                                }),
+                            };
+                        } catch (err) {
+                            console.error("❌ [productSearch] Error:", err);
+                            return {
+                                role: "assistant" as const,
+                                content: "Đã xảy ra lỗi khi tìm sản phẩm. Vui lòng thử lại sau.",
+                            };
+                        }
+                    }
+                },
+            },
         });
 
-        return firstCall.toDataStreamResponse();
+        const response = firstCall.toDataStreamResponse();
+        
+        const headers = new Headers(response.headers);
+        headers.set('Access-Control-Allow-Origin', '*');
+        headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+        headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+        return new Response(response.body, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: headers,
+        });
     } catch (error) {
         console.error("GPT ToolInvocation lỗi:", error);
-        console.log("💥 Error message:", (error as any)?.message);
-        console.log("📌 Error stack:", (error as any)?.stack);
         const encoder = new TextEncoder();
         const body = encoder.encode(
             `data: ${JSON.stringify({
@@ -131,6 +162,9 @@ export async function POST(req: Request) {
                 "Content-Type": "text/event-stream",
                 "Cache-Control": "no-cache",
                 Connection: "keep-alive",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization",
             },
         });
     }
