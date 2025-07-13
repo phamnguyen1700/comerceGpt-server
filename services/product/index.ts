@@ -1,46 +1,12 @@
 import { IProductCreatePayload, IProductCreateSkuPayload, IProductDetail, IProductResponse, IProductUpdatePayload, ISkuUpdatePayload } from "@/types/product";
 import { get, post, remove, patch } from "@/util/Http";
-import { IProduct } from "@/types/product";
 
-export async function getAllProducts() {
-    // Mock data cho testing
-    return {
-        data: [
-            {
-                id: 1,
-                name: "Kem dưỡng ẩm cho da khô",
-                skinConcerns: ["dry", "sensitive"],
-                ingredients: ["water", "glycerin", "hyaluronic acid"],
-                price: 250000,
-                description: "Kem dưỡng ẩm chuyên sâu cho da khô và nhạy cảm"
-            },
-            {
-                id: 2,
-                name: "Sữa rửa mặt cho da dầu",
-                skinConcerns: ["oily", "combination"],
-                ingredients: ["water", "salicylic acid", "tea tree oil"],
-                price: 180000,
-                description: "Sữa rửa mặt kiểm soát dầu cho da dầu và hỗn hợp"
-            },
-            {
-                id: 3,
-                name: "Serum vitamin C",
-                skinConcerns: ["normal", "combination", "dry"],
-                ingredients: ["water", "vitamin c", "niacinamide"],
-                price: 350000,
-                description: "Serum làm sáng da và chống oxy hóa"
-            },
-            {
-                id: 4,
-                name: "Kem chống nắng SPF 50",
-                skinConcerns: ["sensitive", "dry", "normal", "combination", "oily"],
-                ingredients: ["zinc oxide", "titanium dioxide", "aloe vera"],
-                price: 280000,
-                description: "Kem chống nắng vật lý phù hợp mọi loại da"
-            }
-        ]
-    };
-}
+export const getAllProducts = async (filters = {}) => {
+    const res = await get<IProductResponse>("product", {
+        params: filters,
+    });
+    return res.data;
+};
 export const getProductDetail = async (id: string) => {
     const res = await get<IProductDetail>(`/product/${id}`);
     return res.data;
