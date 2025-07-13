@@ -134,17 +134,89 @@ export async function POST(req: Request) {
         });
 
         const response = firstCall.toDataStreamResponse();
+        console.log(response);
         
         const headers = new Headers(response.headers);
         headers.set('Access-Control-Allow-Origin', '*');
         headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
         headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
-        return new Response(response.body, {
-            status: response.status,
-            statusText: response.statusText,
-            headers: headers,
-        });
+        const reader = response.body?.getReader();
+        if (!reader) {
+            return new Response(JSON.stringify({
+                success: false,
+                message: 'No response body from GPT',
+                timestamp: new Date().toISOString()
+            }), {
+                status: 500,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+                    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+                },
+            });
+        }
+        let result = '';
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            result += new TextDecoder().decode(value);
+        }
+
+        // Log ra nội dung thực tế sẽ trả về client
+        console.log('RESPONSE TO CLIENT:', result);
+
+        // result là toàn bộ chuỗi stream
+        const lines = result.split('\n');
+        let text = '';
+        let productJson: any = null;
+
+        for (const line of lines) {
+            // Lấy các dòng chat thường
+            const match = line.match(/^0:\"(.*)\"$/);
+            if (match) {
+                text += match[1];
+            }
+            // Lấy dòng trả về sản phẩm (dạng JSON trong dòng bắt đầu bằng a:)
+            if (line.startsWith('a:')) {
+                try {
+                    const obj = JSON.parse(line.slice(2));
+                    if (obj.result && obj.result.content) {
+                        // content là chuỗi JSON, cần parse tiếp
+                        productJson = JSON.parse(obj.result.content);
+                    }
+                } catch {}
+            }
+        }
+
+        if (productJson) {
+            // Trả về raw stream (nguyên chuỗi result)
+            return new Response(result, {
+                status: 200,
+                headers: {
+                    'Content-Type': 'text/plain; charset=utf-8',
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+                    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+                },
+            });
+        } else {
+            // Trả về JSON message như cũ
+            return new Response(JSON.stringify({
+                success: true,
+                message: text,
+                timestamp: new Date().toISOString()
+            }), {
+                status: 200,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+                    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+                },
+            });
+        }
     } catch (error) {
         console.error("GPT ToolInvocation lỗi:", error);
         const encoder = new TextEncoder();
