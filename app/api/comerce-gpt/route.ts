@@ -170,7 +170,7 @@ export async function POST(req: Request) {
         // result là toàn bộ chuỗi stream
         const lines = result.split('\n');
         let text = '';
-        let productJson: any = null;
+        let productJson: Record<string, unknown> | null = null;
 
         for (const line of lines) {
             // Lấy các dòng chat thường
